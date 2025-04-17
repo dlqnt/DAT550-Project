@@ -73,7 +73,7 @@ print(f"Encoder Handle: {tfhub_handle_encoder}")
 print(f"Preprocessor Handle: {tfhub_handle_preprocess}")
 
 # Hyperparameters
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS = 4
 INIT_LR = 3e-5
 PATIENCE = 2
@@ -120,21 +120,49 @@ print("TF Datasets created.")
 # --- Model Building ---
 print("\n--- Building BERT Model ---")
 
-def build_bert_model():
+# Load the full preprocessor object first to access its sub-modules
+print(f"Loading full preprocessor object from: {tfhub_handle_preprocess}")
+bert_preprocessor_obj = hub.load(tfhub_handle_preprocess)
+print("Preprocessor object loaded.")
+
+def build_bert_model_with_controlled_seq_length(seq_length=512): # Default to 512
+    print(f"Building model with target sequence length: {seq_length}")
     text_input = tf.keras.layers.Input(shape=(), dtype=tf.string, name='text')
-    preprocessing_layer = hub.KerasLayer(tfhub_handle_preprocess, name='preprocessing')
-    encoder_inputs = preprocessing_layer(text_input)
+
+    # Tokenization Layer
+    tokenize_layer = hub.KerasLayer(bert_preprocessor_obj.tokenize, name='tokenization')
+    # Result is a RaggedTensor, shape [batch, (tokens)]
+    tokenized_inputs = tokenize_layer(text_input)
+    print(f"Shape after tokenization (Ragged): {tokenized_inputs.shape}")
+
+    # Packing Layer (Token IDs, Mask, Type IDs)
+    packing_layer = hub.KerasLayer(
+        bert_preprocessor_obj.bert_pack_inputs,
+        arguments=dict(seq_length=seq_length), 
+        name='bert_packing'
+    )
+    # Takes a list/tuple of tokenized segments. We only have one.
+    # Result is a dict {'input_word_ids': Tensor, 'input_mask': Tensor, 'input_type_ids': Tensor}
+    encoder_inputs = packing_layer([tokenized_inputs]) # Pass as a list
+    print(f"Shape of 'input_word_ids' after packing: {encoder_inputs['input_word_ids'].shape}")
+    print(f"Shape of 'input_mask' after packing: {encoder_inputs['input_mask'].shape}")
+
+    # BERT Encoder Layer
     encoder = hub.KerasLayer(tfhub_handle_encoder, trainable=True, name='BERT_encoder')
-    outputs = encoder(encoder_inputs)
+    outputs = encoder(encoder_inputs) # Pass the dict from the packing layer
+
+    # Classification Head 
     net = outputs['pooled_output']
     net = tf.keras.layers.Dropout(0.1)(net)
+    # Ensure output is float32 when using mixed precision for stability
     net = tf.keras.layers.Dense(1, activation='sigmoid', name='classifier', dtype=tf.float32)(net)
+
     return tf.keras.Model(inputs=text_input, outputs=net)
 
-bert_model = build_bert_model()
+# Build the model using the new function
+bert_model = build_bert_model_with_controlled_seq_length(seq_length=512) # max seq length for BERT, reduce batch size if out of memory :thinking:
 bert_model.summary()
-print("BERT model built.")
-
+print("BERT model built with controlled sequence length.")
 
 # --- Optimizer and Compilation ---
 print("\n--- Compiling Model (using Keras AdamW + PolynomialDecay Schedule) ---")
