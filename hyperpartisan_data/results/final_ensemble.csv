@@ -1,0 +1,6 @@
+Class,Precision,Recall,F1-Score,Support
+Not Hyperpartisan (0),0.73,0.90,0.81,314
+Hyperpartisan (1),0.87,0.66,0.75,314
+Accuracy,0.80,,,628
+Macro Avg,0.80,0.78,0.78,628
+Weighted Avg,0.80,0.78,0.78,628
