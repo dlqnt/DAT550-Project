@@ -47,7 +47,7 @@ X_test_pad  = prepare(texts_test)
 
 # Build the LSTM
 embedding_dim = 512 
-lstm_units    = 64 * 5
+lstm_units    = 64 
 
 def build_model():
     m = Sequential([
