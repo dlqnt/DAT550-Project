@@ -57,7 +57,6 @@ The project involves the following key steps:
 ├── feature_engineering.ipynb    # Notebook 4: Creates features for baseline models from official splits
 ├── model_training.ipynb         # Notebook 5: Trains and evaluates baseline models
 ├── BERT.py                      # Script 6: Trains and evaluates BERT model with CV/Ensemble
-├── requirements.txt             # Python dependencies
 └── README.md                    # This file
 ```
 
@@ -83,10 +82,7 @@ The project involves the following key steps:
     ```
 
 3.  **Install dependencies:**
-    ```bash
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    ```
+    
     *(Note: You may need to install system libraries for `lxml` if XML parsing uses it and fails.)*
 
 4.  **Download NLTK Data:** The notebooks will attempt to download necessary NLTK resources (`punkt`, `stopwords`, `vader_lexicon`). If this fails due to network restrictions, you may need to download them manually.
