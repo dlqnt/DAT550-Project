@@ -4,38 +4,77 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, roc_curve, auc
 import pandas as pd
 import matplotlib.pyplot as plt
+import string
+import nltk
+
+nltk.download("punkt_tab")  # Ensure NLTK punkt tokenizer is downloaded
 
 '''
-Seeing if emotionality alone can be used to classify hyperpartisan articles.
-This is a simple implementation of emotionality using TextBlob.
+Seeing if stylometry alone can be used to classify hyperpartisan articles.
+This is a simple implementation of stylometry using TextBlob.
 
-Emotionality performs better than random, worse than Stylometry, and MUCH worse than BERT.
+Stylometry alone is a little better than Emotionality alone. BERT is A LOT better.
 '''
 
-def extract_emotionality(text: str) -> pd.Series:
+def extract_stylometry(text: str) -> pd.Series:
     """
-    Analyze text polarity and subjectivity via TextBlob.
-    Returns a Series [polarity, subjectivity].
+    Extract simple stylometric features from the text.
+    Returns a Series [avg_word_length, avg_sentence_length, type_token_ratio, punctuation_ratio].
     """
     blob = TextBlob(text)
-    return pd.Series([blob.sentiment.polarity, blob.sentiment.subjectivity],
-                     index=["polarity", "subjectivity"])
+
+    words = blob.words # Tokenize words
+    sentences = blob.sentences # Tokenize sentences
+    num_words = len(words) # Total number of words
+    num_sentences = len(sentences) # Total number of sentences
+    num_unique_words = len(set(w.lower() for w in words)) # Unique words count
+    num_chars = len(text) # Total number of characters
+
+    if num_words > 0: # If there are words in the text...
+        # ... calculate average word length and type-token ratio
+        avg_word_length = sum(len(word) for word in words) / num_words
+        type_token_ratio = num_unique_words / num_words
+    else:
+        # If no words, set to 0 to avoid division by zero
+        avg_word_length = 0
+        type_token_ratio = 0
+
+    if num_sentences > 0: # If there are sentences in the text...
+        # ... calculate average sentence length
+        avg_sentence_length = num_words / num_sentences
+    else:
+        # If no sentences, set to 0 to avoid division by zero
+        avg_sentence_length = 0
+
+    if num_chars > 0: # If there are characters in the text...
+        # ... calculate punctuation ratio
+        punctuation_ratio = sum(1 for char in text if char in string.punctuation) / num_chars
+    else:
+        # If no characters, set to 0 to avoid division by zero
+        punctuation_ratio = 0
+
+    # Return the calculated features as a Series
+    return pd.Series(
+        [avg_word_length, avg_sentence_length, type_token_ratio, punctuation_ratio],
+        index=["avg_word_length", "avg_sentence_length", "type_token_ratio", "punctuation_ratio"]
+    )
 
 
-def get_emotionality_report(df: pd.DataFrame):
+def get_stylometry_report(df: pd.DataFrame):
     """
-    Train a logistic regression on polarity and subjectivity,
+    Train a logistic regression on stylometric features,
     return the classification report as DataFrame along with model and test data.
     """
     # Drop incomplete rows and extract features
     df = df.dropna(subset=["text", "hyperpartisan"])
-    df[["polarity", "subjectivity"]] = df["text"].apply(extract_emotionality)
+    df[["avg_word_length", "avg_sentence_length", "type_token_ratio", "punctuation_ratio"]] = df["text"].apply(extract_stylometry)
 
     # Train/test split
-    X = df[["polarity", "subjectivity"]]
+    X = df[["avg_word_length", "avg_sentence_length", "type_token_ratio", "punctuation_ratio"]]
     y = df["hyperpartisan"]
+    
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=123
+        X, y, test_size=0.5, random_state=123
     )
 
     # Fit model
@@ -53,7 +92,6 @@ def get_emotionality_report(df: pd.DataFrame):
     )
 
     return report_df, model, X_test, y_test
-
 
 def load_bert_report(path: str) -> pd.DataFrame:
     """
@@ -138,14 +176,14 @@ def main():
     # Load data
     df = pd.read_csv(data_path)
 
-    # Emotionality report + model
-    emotion_df, model, X_test, y_test = get_emotionality_report(df)
+    # Stylometry report + model
+    stylometry_df, model, X_test, y_test = get_stylometry_report(df)
 
     # BERT report
     bert_df = load_bert_report(bert_path)
 
     # Merge for comparison
-    comp_df = merge_reports(emotion_df, bert_df)
+    comp_df = merge_reports(stylometry_df, bert_df)
 
     # Show merged metrics
     print(comp_df[[
@@ -156,11 +194,6 @@ def main():
     ]])
 
     plot_comparison(comp_df)
-    # The emotionality model is better than random, and does not require much resources.
-    # The BERT model is better than random, but requires more resources.
-
-
-    # Plot ROC curve
     plot_roc(model, X_test, y_test) 
 
 if __name__ == "__main__":
